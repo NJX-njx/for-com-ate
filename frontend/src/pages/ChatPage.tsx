@@ -14,7 +14,7 @@ interface Message {
 const ChatPage: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isProfileOpen, setIsProfileOpen] = useState(true);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -150,7 +150,7 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col relative bg-white h-full">
+      <div className={`flex-1 flex flex-col relative bg-white h-full transition-all duration-300 ease-in-out ${isThinkingOpen ? 'md:mr-[400px]' : ''}`}>
         {/* Mobile Header */}
         <div className="md:hidden h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-white z-10 flex-shrink-0">
           <span className="font-bold text-gray-800">SophieSync</span>
