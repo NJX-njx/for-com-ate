@@ -83,9 +83,10 @@ const SYSTEM_PROMPT = [
   "• 时间约束：单个任务默认 30 min 内完成；超时 5 min 即触发自检并重试一次，再次失败则标记异常并终止。",
   "",
   "### 2. 核心原则",
-  "1. **工具优先**：如果任务目标是“写入 Notion”或“创建笔记”，**严禁**在对话中直接输出长篇内容。你必须直接调用 `notion_create_page` 或 `notion_append_content` 工具，将内容作为参数传递给工具。",
+  "1. **思考与行动**：在执行任务时，你可以先输出简短的思考（Thought），分析任务意图和所需数据。但对于核心产出（如笔记内容），必须通过工具调用（Action）来实现。",
+  "2. **工具优先**：如果任务目标是“写入 Notion”或“创建笔记”，**严禁**在对话中直接输出长篇笔记内容。你必须直接调用 `notion_create_page` 或 `notion_append_content` 工具，将内容作为参数传递给工具。",
   "   补充：若工具调用失败，立即重试 1 次；再次失败则在对话中简洁说明失败原因，避免无意义重试。",
-  "2. **引用证据**：任何结论或建议都必须引用 OCR 内容或 Notion 数据字段。",
+  "3. **引用证据**：任何结论或建议都必须引用 OCR 内容或 Notion 数据字段。",
   "   引用格式示例：`(来源：OCR行3-5)` 或 `(来源：Notion页面《xxx》)`，确保读者可溯源。",
   "3. **主动搜索**：在创建新页面前，建议先调用 `notion_search` 确认是否已存在相关页面，避免重复。",
   "   搜索关键词策略：优先用任务标题中的核心名词 + 学习者 ID；如无结果，再使用学习者 ID 范围搜索。",
@@ -115,23 +116,7 @@ const SYSTEM_PROMPT = [
   "   调用后立即检查返回字符串是否包含 `ID:` 与 `URL:`，缺少任意一项即视为失败并重试一次。",
   "5. 确认工具执行成功后，向用户汇报结果（包含新页面的链接）。",
   "   汇报格式：`✅ T{{n}} 完成 → {{页面标题}} {{URL}}`，保持一行内结束。",
-  "",
-  "### 5. 输出规范",
-  "- 如果调用了工具，请在工具执行完毕后，简要总结操作结果。",
-  "  汇报模板：`✅ T{{n}} 完成 → {{页面标题}} {{URL}}`，必须一行内 ≤ 140 字符。",
-  "- 如果未调用工具，请直接输出分析结果。",
-  "  输出格式：先一句话结论，后附引用，如：\n  > 结论：该题为一次函数应用题，需先求斜率。\n  > 来源：OCR 行 8-10。",
-  "- **重要**：如果你无法直接调用工具，请输出以下 JSON 格式，系统将自动帮你执行：",
-  "  ```json",
-  "  {",
-  "    \"tool_name\": \"notion_create_page\",",
-  "    \"arguments\": {",
-  "       \"parentPageId\": \"...\",",
-  "       \"title\": \"...\",",
-  "       \"content\": \"...\"",
-  "    }",
-  "  }",
-  "  ```",
+  
   ""
 ].join("\n");
 
@@ -288,9 +273,15 @@ export const createNodes = (
     const spanPreview = JSON.stringify(state.ocrResult!.spans.slice(0, 10));
     const tablePreview = JSON.stringify(state.ocrResult!.tableData.slice(0, 5));
     
+    // Construct Previous Context Summary
+    const previousContext = state.generatedContents.length > 0 
+        ? `\n之前的执行结果 (Previous Execution Results):\n${state.generatedContents.map((c, i) => `[Task ${i+1} Result]: ${c.slice(0, 500)}...`).join("\n---\n")}`
+        : "";
+
     const userPromptContent = [
       `当前任务:`,
       `<task>\n类型: ${task.type}\n描述: ${task.description}\n优先级: ${task.priority}\n截止: ${task.dueDate ?? "未设定"}\n</task>`,
+      previousContext,
       `\n上下文信息:`,
       `<learner>\nID: ${state.learnerProfile.learnerId}\n水平: ${state.learnerProfile.competencyLevel}\n目标: ${state.learnerProfile.learningGoal}\n偏好: ${state.learnerProfile.preferredStyle}\n</learner>`,
       `Default Parent Page ID: ${state.learnerProfile.learnerId} (Use this ID if the user does not specify a target parent page. If the user specifies a parent page name, use 'notion_search' to find its ID first.)`,
@@ -443,10 +434,10 @@ export const createNodes = (
       finalContent = "Task execution stopped due to maximum step limit.";
     }
     
-    // Override content if pages were created to ensure clean output
+    // Append created page links to the model's output instead of overriding it
     if (newCreatedPages.length > 0) {
-        const links = newCreatedPages.map(p => `[${p.url ? '点击查看页面' : '页面ID: ' + p.id}](${p.url || '#'})`).join('  ');
-        finalContent = `✅ **任务 T${task.taskId.replace('T','')} 完成**\n\n已创建 Notion 页面：\n${links}`;
+        const links = newCreatedPages.map(p => `[📄 ${p.url ? '查看 Notion 页面' : '页面 ID: ' + p.id}](${p.url || '#'})`).join('  ');
+        finalContent = `${finalContent}\n\n> **相关链接**：${links}`;
     }
     
     // Append to generatedContents

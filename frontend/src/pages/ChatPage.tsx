@@ -36,13 +36,12 @@ const ChatPage: React.FC = () => {
 
   const handleProfileSubmit = async (data: any) => {
     setProfile(data);
-    console.log("Profile updated:", data);
-    // Simulate sending to backend
-    try {
-        console.log("Syncing profile to backend...");
-    } catch (e) {
-        console.error("Failed to sync profile", e);
-    }
+    // Save to localStorage to persist across reloads
+    localStorage.setItem('learnerProfile', JSON.stringify(data));
+    console.log("Profile updated and saved locally:", data);
+    
+    // Optional: In a real app, you would also send this to a backend endpoint like /api/user/profile
+    // to persist it across devices.
   };
 
   const openThinkingSidebar = (steps: any[]) => {
